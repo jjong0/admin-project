@@ -22,9 +22,15 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link to="/" />}>
+            <SidebarMenuButton
+              size="lg"
+              className="group-data-[collapsible=icon]:justify-center"
+              render={<Link to="/" />}
+            >
               <LayoutDashboard className="size-4" />
-              <span className="font-semibold">Admin</span>
+              <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
+                Admin
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
