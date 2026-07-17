@@ -9,6 +9,6 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { title: '대시보드', url: '/', icon: LayoutDashboard },
-  { title: '사용자 관리', url: '/users', icon: Users },
+  { title: '고객 관리', url: '/users', icon: Users },
   { title: '설정', url: '/settings', icon: Settings },
 ]

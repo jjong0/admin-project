@@ -131,7 +131,12 @@ export default function Users() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">사용자 관리</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">고객 관리</h1>
+          <p className="text-sm text-muted-foreground">
+            문의 응대와 계정 상태 변경은 여기서 처리합니다.
+          </p>
+        </div>
         <Button variant="outline" onClick={() => exportToCsv(filtered)}>
           <DownloadIcon />
           CSV 내보내기
@@ -170,10 +175,13 @@ export default function Users() {
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+      <div className="overflow-hidden rounded-md ring-1 ring-border">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="border-t-2 border-b-2 border-foreground/25 hover:bg-transparent">
+              <TableHead className="border-r border-dashed border-border font-mono text-xs tracking-wider text-muted-foreground">
+                번호
+              </TableHead>
               <TableHead>이름</TableHead>
               <TableHead>이메일</TableHead>
               <TableHead>상태</TableHead>
@@ -186,7 +194,7 @@ export default function Users() {
             {paged.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="h-24 text-center text-muted-foreground"
                 >
                   검색 결과가 없습니다.
@@ -195,6 +203,9 @@ export default function Users() {
             ) : (
               paged.map((user) => (
                 <TableRow key={user.id}>
+                  <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
+                    {user.id}
+                  </TableCell>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.email}
@@ -204,10 +215,10 @@ export default function Users() {
                       {USER_STATUS_LABEL[user.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="font-mono text-muted-foreground">
                     {user.joinedAt}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="font-mono text-muted-foreground">
                     {user.lastLoginAt}
                   </TableCell>
                   <TableCell className="text-right">
@@ -276,7 +287,9 @@ export default function Users() {
             <>
               <DialogHeader>
                 <DialogTitle>{selectedUser.name}</DialogTitle>
-                <DialogDescription>{selectedUser.id}</DialogDescription>
+                <DialogDescription className="font-mono">
+                  {selectedUser.id}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2 text-sm">
                 <div className="flex justify-between">
@@ -285,15 +298,15 @@ export default function Users() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">전화번호</span>
-                  <span>{selectedUser.phone}</span>
+                  <span className="font-mono">{selectedUser.phone}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">가입일</span>
-                  <span>{selectedUser.joinedAt}</span>
+                  <span className="font-mono">{selectedUser.joinedAt}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">최근 로그인</span>
-                  <span>{selectedUser.lastLoginAt}</span>
+                  <span className="font-mono">{selectedUser.lastLoginAt}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">상태</span>
