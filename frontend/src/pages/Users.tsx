@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { DownloadIcon } from "lucide-react";
 
+import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,14 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -35,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePaginatedFilter } from "@/hooks/use-paginated-filter";
 import {
   generateMockUsers,
   USER_STATUS_LABEL,
@@ -88,7 +82,6 @@ function exportToCsv(users: MockUser[]) {
 export default function Users() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
-  const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<MockUser | null>(null);
   const [users, setUsers] = useState(ALL_USERS);
 
@@ -104,21 +97,17 @@ export default function Users() {
     });
   }, [users, search, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  );
+  const { currentPage, totalPages, paged, setPage, resetPage } =
+    usePaginatedFilter(filtered, PAGE_SIZE);
 
   function handleSearchChange(value: string) {
     setSearch(value);
-    setPage(1);
+    resetPage();
   }
 
   function handleStatusFilterChange(value: UserStatus | "all") {
     setStatusFilter(value);
-    setPage(1);
+    resetPage();
   }
 
   function handleStatusChange(id: string, status: UserStatus) {
@@ -130,30 +119,34 @@ export default function Users() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">고객 관리</h1>
           <p className="text-sm text-muted-foreground">
             문의 응대와 계정 상태 변경은 여기서 처리합니다.
           </p>
         </div>
-        <Button variant="outline" onClick={() => exportToCsv(filtered)}>
+        <Button
+          variant="outline"
+          className="self-start sm:self-auto"
+          onClick={() => exportToCsv(filtered)}
+        >
           <DownloadIcon />
           CSV 내보내기
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="이름 또는 이메일 검색"
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
         />
         <Select
           value={statusFilter}
           onValueChange={(value) =>
-            handleStatusFilterChange(value as UserStatus | "all")
+            handleStatusFilterChange((value as UserStatus | "all" | null) ?? "all")
           }
         >
           <SelectTrigger className="w-32">
@@ -170,7 +163,7 @@ export default function Users() {
             <SelectItem value="suspended">정지</SelectItem>
           </SelectContent>
         </Select>
-        <span className="ml-auto text-sm text-muted-foreground">
+        <span className="text-sm text-muted-foreground sm:ml-auto">
           총 {filtered.length}명
         </span>
       </div>
@@ -183,10 +176,10 @@ export default function Users() {
                 번호
               </TableHead>
               <TableHead>이름</TableHead>
-              <TableHead>이메일</TableHead>
+              <TableHead className="hidden md:table-cell">이메일</TableHead>
               <TableHead>상태</TableHead>
-              <TableHead>가입일</TableHead>
-              <TableHead>최근 로그인</TableHead>
+              <TableHead className="hidden lg:table-cell">가입일</TableHead>
+              <TableHead className="hidden xl:table-cell">최근 로그인</TableHead>
               <TableHead className="pr-4.5 text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
@@ -207,7 +200,7 @@ export default function Users() {
                     {user.id}
                   </TableCell>
                   <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
                     {user.email}
                   </TableCell>
                   <TableCell>
@@ -215,10 +208,10 @@ export default function Users() {
                       {USER_STATUS_LABEL[user.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
+                  <TableCell className="hidden font-mono text-muted-foreground lg:table-cell">
                     {user.joinedAt}
                   </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
+                  <TableCell className="hidden font-mono text-muted-foreground xl:table-cell">
                     {user.lastLoginAt}
                   </TableCell>
                   <TableCell className="text-right">
@@ -237,46 +230,11 @@ export default function Users() {
         </Table>
       </div>
 
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                text="이전"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setPage((p) => Math.max(1, p - 1));
-                }}
-              />
-            </PaginationItem>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <PaginationItem key={p}>
-                <PaginationLink
-                  href="#"
-                  isActive={p === currentPage}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setPage(p);
-                  }}
-                >
-                  {p}
-                </PaginationLink>
-              </PaginationItem>
-            ))}
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                text="다음"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setPage((p) => Math.min(totalPages, p + 1));
-                }}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
+      <PaginationControls
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+      />
 
       <Dialog
         open={!!selectedUser}
@@ -312,9 +270,9 @@ export default function Users() {
                   <span className="text-muted-foreground">상태</span>
                   <Select
                     value={selectedUser.status}
-                    onValueChange={(value) =>
-                      handleStatusChange(selectedUser.id, value as UserStatus)
-                    }
+                    onValueChange={(value) => {
+                      if (value) handleStatusChange(selectedUser.id, value as UserStatus);
+                    }}
                   >
                     <SelectTrigger size="sm" className="w-28">
                       <SelectValue>

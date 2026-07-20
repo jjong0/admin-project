@@ -14,21 +14,21 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
+import {
+  ALL_ORDERS,
+  ORDER_STATUS_COLOR,
+  ORDER_STATUS_LABEL,
+  type OrderStatus,
+} from '@/lib/mock-orders'
 
-type Stage = {
-  key: string
-  label: string
-  count: number
-  color: string
-}
+const STAGE_ORDER: OrderStatus[] = ['paid', 'preparing', 'shipping', 'delivered', 'cancelled']
 
-const STAGES: Stage[] = [
-  { key: 'paid', label: '결제완료', count: 21, color: 'var(--chart-1)' },
-  { key: 'preparing', label: '상품준비중', count: 47, color: 'var(--chart-2)' },
-  { key: 'shipping', label: '배송중', count: 63, color: 'var(--chart-3)' },
-  { key: 'delivered', label: '배송완료', count: 312, color: 'var(--chart-4)' },
-  { key: 'cancelled', label: '취소·반품', count: 5, color: 'var(--chart-5)' },
-]
+const STAGES = STAGE_ORDER.map((status) => ({
+  key: status,
+  label: ORDER_STATUS_LABEL[status],
+  count: ALL_ORDERS.filter((order) => order.status === status).length,
+  color: ORDER_STATUS_COLOR[status],
+}))
 
 const chartData = [
   { date: '2026-06-18', users: 186, signups: 42 },
@@ -41,11 +41,11 @@ const chartData = [
 const chartConfig = {
   users: {
     label: '전체 고객',
-    color: 'var(--chart-2)',
+    color: 'var(--chart-trend-1)',
   },
   signups: {
     label: '신규 가입',
-    color: 'var(--chart-1)',
+    color: 'var(--chart-trend-2)',
   },
 } satisfies ChartConfig
 
@@ -60,10 +60,10 @@ export default function Dashboard() {
       </div>
 
       <Card>
-        <CardContent className="flex items-stretch overflow-x-auto">
+        <CardContent className="flex items-stretch overflow-x-auto scroll-px-1 snap-x snap-mandatory">
           {STAGES.map((stage, i) => (
             <Fragment key={stage.key}>
-              <div className="flex min-w-32 flex-1 flex-col gap-2 px-1 py-1">
+              <div className="flex min-w-28 flex-1 snap-start flex-col gap-2 px-1 py-1">
                 <span
                   className="h-1.5 w-7 rounded-full"
                   style={{ background: stage.color }}
@@ -121,8 +121,8 @@ export default function Dashboard() {
                 cursor={false}
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value: string) =>
-                      new Date(value).toLocaleDateString('ko-KR', {
+                    labelFormatter={(value) =>
+                      new Date(String(value)).toLocaleDateString('ko-KR', {
                         month: 'long',
                         day: 'numeric',
                       })

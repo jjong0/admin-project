@@ -39,7 +39,9 @@ export function SiteHeader() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <SidebarTrigger />
-      <h2 className="text-sm font-semibold">{current?.title ?? '대시보드'}</h2>
+      <h2 className="text-sm font-semibold" aria-current="page">
+        {current?.title ?? '대시보드'}
+      </h2>
 
       <div className="ml-auto flex items-center gap-4">
         <span className="font-mono text-xs tabular-nums text-muted-foreground">

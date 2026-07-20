@@ -81,6 +81,9 @@
     --chart-3: #4C6B63;
     --chart-4: #4B6B45;
     --chart-5: #A8342A;
+    /* 범용 추이 차트 색 — 주문 단계 색과 겹치지 않는 별도 팔레트 */
+    --chart-trend-1: #5C5A8C;
+    --chart-trend-2: #B97A96;
     --radius: 0.375rem;
     --sidebar: #E7EAE2;
     --sidebar-foreground: #1E2321;
@@ -116,6 +119,8 @@
     --chart-3: #86A79B;
     --chart-4: #8FAE86;
     --chart-5: #D97A6F;
+    --chart-trend-1: #A6A3D9;
+    --chart-trend-2: #E3A8BF;
     --sidebar: #1B1D1B;
     --sidebar-foreground: #E7E7E0;
     --sidebar-primary: #7C9BC7;
