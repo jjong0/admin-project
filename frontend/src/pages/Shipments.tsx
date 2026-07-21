@@ -2,6 +2,15 @@ import { useMemo, useState } from "react";
 
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -23,6 +32,7 @@ import {
   ALL_ORDERS,
   ORDER_STATUS_COLOR,
   ORDER_STATUS_LABEL,
+  type MockOrder,
   type OrderStatus,
 } from "@/lib/mock-orders";
 
@@ -31,10 +41,12 @@ const PAGE_SIZE = 10;
 export default function Shipments() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+  const [selectedOrder, setSelectedOrder] = useState<MockOrder | null>(null);
+  const [orders, setOrders] = useState(ALL_ORDERS);
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return ALL_ORDERS.filter((o) => {
+    return orders.filter((o) => {
       const matchesKeyword =
         !keyword ||
         o.customerName.toLowerCase().includes(keyword) ||
@@ -42,7 +54,7 @@ export default function Shipments() {
       const matchesStatus = statusFilter === "all" || o.status === statusFilter;
       return matchesKeyword && matchesStatus;
     });
-  }, [search, statusFilter]);
+  }, [orders, search, statusFilter]);
 
   const { currentPage, totalPages, paged, setPage, resetPage } =
     usePaginatedFilter(filtered, PAGE_SIZE);
@@ -50,6 +62,13 @@ export default function Shipments() {
   function handleSearchChange(value: string) {
     setSearch(value);
     resetPage();
+  }
+
+  function handleStatusChange(id: string, status: OrderStatus) {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    setSelectedOrder((prev) =>
+      prev && prev.id === id ? { ...prev, status } : prev,
+    );
   }
 
   return (
@@ -100,21 +119,22 @@ export default function Shipments() {
         <Table>
           <TableHeader>
             <TableRow className="border-t-2 border-b-2 border-foreground/25 hover:bg-transparent">
-              <TableHead className="border-r border-dashed border-border font-mono text-xs tracking-wider text-muted-foreground">
+              <TableHead className="w-28 border-r border-dashed border-border font-mono text-xs tracking-wider text-muted-foreground">
                 주문번호
               </TableHead>
-              <TableHead>고객명</TableHead>
+              <TableHead className="w-24">고객명</TableHead>
               <TableHead className="hidden sm:table-cell">상품명</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead className="hidden text-right md:table-cell">운송장번호</TableHead>
-              <TableHead className="hidden text-right lg:table-cell">주문일</TableHead>
+              <TableHead className="w-28">상태</TableHead>
+              <TableHead className="hidden w-36 text-right md:table-cell">운송장번호</TableHead>
+              <TableHead className="hidden w-28 text-right lg:table-cell">주문일</TableHead>
+              <TableHead className="w-24 text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paged.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="h-24 text-center text-muted-foreground"
                 >
                   검색 결과가 없습니다.
@@ -126,10 +146,10 @@ export default function Shipments() {
                   <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
                     {order.id}
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="truncate font-medium">
                     {order.customerName}
                   </TableCell>
-                  <TableCell className="hidden text-muted-foreground sm:table-cell">
+                  <TableCell className="hidden truncate text-muted-foreground sm:table-cell">
                     {order.productName}
                   </TableCell>
                   <TableCell>
@@ -147,6 +167,16 @@ export default function Shipments() {
                   <TableCell className="hidden text-right font-mono text-muted-foreground lg:table-cell">
                     {order.orderedAt}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="pr-0"
+                      onClick={() => setSelectedOrder(order)}
+                    >
+                      상세보기
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -159,6 +189,66 @@ export default function Shipments() {
         totalPages={totalPages}
         onPageChange={setPage}
       />
+
+      <Dialog
+        open={!!selectedOrder}
+        onOpenChange={(open) => !open && setSelectedOrder(null)}
+      >
+        <DialogContent>
+          {selectedOrder && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedOrder.customerName}</DialogTitle>
+                <DialogDescription className="font-mono">
+                  {selectedOrder.id}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">상품명</span>
+                  <span>{selectedOrder.productName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">운송장번호</span>
+                  <span className="font-mono">{selectedOrder.trackingNo ?? "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">주문일</span>
+                  <span className="font-mono">{selectedOrder.orderedAt}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">상태</span>
+                  <Select
+                    value={selectedOrder.status}
+                    onValueChange={(value) => {
+                      if (value)
+                        handleStatusChange(selectedOrder.id, value as OrderStatus);
+                    }}
+                  >
+                    <SelectTrigger size="sm" className="w-32">
+                      <SelectValue>
+                        {(value: OrderStatus) => ORDER_STATUS_LABEL[value]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">결제완료</SelectItem>
+                      <SelectItem value="preparing">상품준비중</SelectItem>
+                      <SelectItem value="shipping">배송중</SelectItem>
+                      <SelectItem value="delivered">배송완료</SelectItem>
+                      <SelectItem value="cancelled">취소·반품</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSelectedOrder(null)}>
+                  닫기
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -172,15 +172,15 @@ export default function Users() {
         <Table>
           <TableHeader>
             <TableRow className="border-t-2 border-b-2 border-foreground/25 hover:bg-transparent">
-              <TableHead className="border-r border-dashed border-border font-mono text-xs tracking-wider text-muted-foreground">
+              <TableHead className="w-20 border-r border-dashed border-border font-mono text-xs tracking-wider text-muted-foreground">
                 번호
               </TableHead>
-              <TableHead>이름</TableHead>
+              <TableHead className="w-28">이름</TableHead>
               <TableHead className="hidden md:table-cell">이메일</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead className="hidden lg:table-cell">가입일</TableHead>
-              <TableHead className="hidden xl:table-cell">최근 로그인</TableHead>
-              <TableHead className="pr-4.5 text-right">액션</TableHead>
+              <TableHead className="w-20">상태</TableHead>
+              <TableHead className="hidden w-28 lg:table-cell">가입일</TableHead>
+              <TableHead className="hidden w-28 xl:table-cell">최근 로그인</TableHead>
+              <TableHead className="w-24 text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -199,8 +199,8 @@ export default function Users() {
                   <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
                     {user.id}
                   </TableCell>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell className="hidden text-muted-foreground md:table-cell">
+                  <TableCell className="truncate font-medium">{user.name}</TableCell>
+                  <TableCell className="hidden truncate text-muted-foreground md:table-cell">
                     {user.email}
                   </TableCell>
                   <TableCell>
@@ -218,6 +218,7 @@ export default function Users() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="pr-0"
                       onClick={() => setSelectedUser(user)}
                     >
                       상세보기
