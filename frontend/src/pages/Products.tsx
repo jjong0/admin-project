@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
@@ -27,16 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePaginatedFilter } from "@/hooks/use-paginated-filter";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useServerList } from "@/hooks/use-server-list";
+import { apiFetch } from "@/lib/api-client";
+import type { Product, ProductStatus } from "@/lib/api-types";
+import { LOW_STOCK_THRESHOLD, PRODUCT_STATUS_LABEL, formatDate, formatWon } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import {
-  ALL_PRODUCTS,
-  CATEGORIES,
-  LOW_STOCK_THRESHOLD,
-  PRODUCT_STATUS_LABEL,
-  type MockProduct,
-  type ProductStatus,
-} from "@/lib/mock-products";
 
 const PAGE_SIZE = 10;
 
@@ -44,45 +40,44 @@ const STATUS_BADGE_VARIANT: Record<
   ProductStatus,
   "default" | "secondary" | "destructive"
 > = {
-  selling: "default",
-  hidden: "secondary",
-  soldout: "destructive",
+  SELLING: "default",
+  HIDDEN: "secondary",
+  SOLDOUT: "destructive",
 };
-
-function formatWon(amount: number) {
-  return `₩${amount.toLocaleString("ko-KR")}`;
-}
 
 export default function Products() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | "all">("all");
   const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">("all");
-  const [selectedProduct, setSelectedProduct] = useState<MockProduct | null>(null);
-  const [products, setProducts] = useState(ALL_PRODUCTS);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
 
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchesKeyword = !keyword || p.name.toLowerCase().includes(keyword);
-      const matchesCategory = category === "all" || p.category === category;
-      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-      return matchesKeyword && matchesCategory && matchesStatus;
-    });
-  }, [products, search, category, statusFilter]);
+  const debouncedSearch = useDebouncedValue(search);
 
-  const { currentPage, totalPages, paged, setPage, resetPage } =
-    usePaginatedFilter(filtered, PAGE_SIZE);
+  useEffect(() => {
+    apiFetch<{ categories: string[] }>("/api/products/categories")
+      .then((data) => setCategories(data.categories))
+      .catch(() => setCategories([]));
+  }, []);
 
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    resetPage();
-  }
-
-  function handleStatusChange(id: string, status: ProductStatus) {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
-    setSelectedProduct((prev) =>
-      prev && prev.id === id ? { ...prev, status } : prev,
+  const { items, total, currentPage, totalPages, setPage, loading, error, patchItem } =
+    useServerList<Product>(
+      "/api/products",
+      {
+        search: debouncedSearch,
+        category: category === "all" ? undefined : category,
+        status: statusFilter === "all" ? undefined : statusFilter,
+      },
+      PAGE_SIZE,
     );
+
+  async function handleStatusChange(id: number, status: ProductStatus) {
+    const updated = await apiFetch<Product>(`/api/products/${id}`, {
+      method: "PATCH",
+      body: { status },
+    });
+    patchItem((p) => p.id === id, () => updated);
+    setSelectedProduct((prev) => (prev && prev.id === id ? updated : prev));
   }
 
   return (
@@ -98,15 +93,12 @@ export default function Products() {
         <Input
           placeholder="상품명 검색"
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-xs"
         />
         <Select
           value={category}
-          onValueChange={(value) => {
-            setCategory(value ?? "all");
-            resetPage();
-          }}
+          onValueChange={(value) => setCategory(value ?? "all")}
         >
           <SelectTrigger className="w-32">
             <SelectValue placeholder="카테고리">
@@ -115,7 +107,7 @@ export default function Products() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 카테고리</SelectItem>
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>
@@ -124,10 +116,9 @@ export default function Products() {
         </Select>
         <Select
           value={statusFilter}
-          onValueChange={(value) => {
-            setStatusFilter((value as ProductStatus | "all" | null) ?? "all");
-            resetPage();
-          }}
+          onValueChange={(value) =>
+            setStatusFilter((value as ProductStatus | "all" | null) ?? "all")
+          }
         >
           <SelectTrigger className="w-28">
             <SelectValue placeholder="상태">
@@ -138,13 +129,13 @@ export default function Products() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="selling">판매중</SelectItem>
-            <SelectItem value="soldout">품절</SelectItem>
-            <SelectItem value="hidden">숨김</SelectItem>
+            <SelectItem value="SELLING">판매중</SelectItem>
+            <SelectItem value="SOLDOUT">품절</SelectItem>
+            <SelectItem value="HIDDEN">숨김</SelectItem>
           </SelectContent>
         </Select>
         <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {filtered.length}개
+          총 {total}개
         </span>
       </div>
 
@@ -165,7 +156,19 @@ export default function Products() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.length === 0 ? (
+            {error ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center text-destructive">
+                  {error}
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  불러오는 중...
+                </TableCell>
+              </TableRow>
+            ) : items.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={8}
@@ -175,10 +178,10 @@ export default function Products() {
                 </TableCell>
               </TableRow>
             ) : (
-              paged.map((product) => (
+              items.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
-                    {product.id}
+                    {product.code}
                   </TableCell>
                   <TableCell className="truncate font-medium">{product.name}</TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
@@ -203,7 +206,7 @@ export default function Products() {
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden text-right font-mono text-muted-foreground lg:table-cell">
-                    {product.updatedAt}
+                    {formatDate(product.updatedAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -238,7 +241,7 @@ export default function Products() {
               <DialogHeader>
                 <DialogTitle>{selectedProduct.name}</DialogTitle>
                 <DialogDescription className="font-mono">
-                  {selectedProduct.id}
+                  {selectedProduct.code}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2 text-sm">
@@ -256,7 +259,7 @@ export default function Products() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">수정일</span>
-                  <span className="font-mono">{selectedProduct.updatedAt}</span>
+                  <span className="font-mono">{formatDate(selectedProduct.updatedAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">상태</span>
@@ -273,9 +276,9 @@ export default function Products() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="selling">판매중</SelectItem>
-                      <SelectItem value="soldout">품절</SelectItem>
-                      <SelectItem value="hidden">숨김</SelectItem>
+                      <SelectItem value="SELLING">판매중</SelectItem>
+                      <SelectItem value="SOLDOUT">품절</SelectItem>
+                      <SelectItem value="HIDDEN">숨김</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

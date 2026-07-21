@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 
 type NotificationKey = "newOrder" | "lowStock" | "shippingDelay";
@@ -53,6 +54,7 @@ function SettingRow({
 }
 
 export default function Settings() {
+  const { admin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<Record<NotificationKey, boolean>>({
     newOrder: true,
@@ -81,15 +83,15 @@ export default function Settings() {
         <CardContent className="grid gap-2 text-sm">
           <div className="flex justify-between border-b border-dashed border-border py-2 first:pt-0">
             <span className="text-muted-foreground">이름</span>
-            <span className="font-medium">관리자</span>
+            <span className="font-medium">{admin?.name ?? "-"}</span>
           </div>
           <div className="flex justify-between border-b border-dashed border-border py-2">
             <span className="text-muted-foreground">이메일</span>
-            <span className="font-mono">admin@example.com</span>
+            <span className="font-mono">{admin?.email ?? "-"}</span>
           </div>
           <div className="flex justify-between py-2 last:pb-0">
             <span className="text-muted-foreground">역할</span>
-            <span className="font-medium">슈퍼관리자</span>
+            <span className="font-medium">관리자</span>
           </div>
         </CardContent>
       </Card>

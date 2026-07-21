@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
@@ -27,48 +27,48 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePaginatedFilter } from "@/hooks/use-paginated-filter";
-import {
-  ALL_ORDERS,
-  ORDER_STATUS_COLOR,
-  ORDER_STATUS_LABEL,
-  type MockOrder,
-  type OrderStatus,
-} from "@/lib/mock-orders";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useServerList } from "@/hooks/use-server-list";
+import { apiFetch } from "@/lib/api-client";
+import type { OrderDetail, OrderStatus, OrderSummary } from "@/lib/api-types";
+import { ORDER_STATUS_COLOR, ORDER_STATUS_LABEL, formatDate, formatWon } from "@/lib/status";
 
 const PAGE_SIZE = 10;
 
 export default function Shipments() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
-  const [selectedOrder, setSelectedOrder] = useState<MockOrder | null>(null);
-  const [orders, setOrders] = useState(ALL_ORDERS);
+  const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
+  const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return orders.filter((o) => {
-      const matchesKeyword =
-        !keyword ||
-        o.customerName.toLowerCase().includes(keyword) ||
-        o.productName.toLowerCase().includes(keyword);
-      const matchesStatus = statusFilter === "all" || o.status === statusFilter;
-      return matchesKeyword && matchesStatus;
-    });
-  }, [orders, search, statusFilter]);
+  const debouncedSearch = useDebouncedValue(search);
 
-  const { currentPage, totalPages, paged, setPage, resetPage } =
-    usePaginatedFilter(filtered, PAGE_SIZE);
+  const { items, total, currentPage, totalPages, setPage, loading, error, patchItem } =
+    useServerList<OrderSummary>(
+      "/api/orders",
+      { search: debouncedSearch, status: statusFilter === "all" ? undefined : statusFilter },
+      PAGE_SIZE,
+    );
 
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    resetPage();
+  function openOrderDetail(order: OrderSummary) {
+    setSelectedOrder(order);
+    setOrderDetail(null);
+    setDetailLoading(true);
+    apiFetch<OrderDetail>(`/api/orders/${order.id}`)
+      .then(setOrderDetail)
+      .catch(() => setOrderDetail(null))
+      .finally(() => setDetailLoading(false));
   }
 
-  function handleStatusChange(id: string, status: OrderStatus) {
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
-    setSelectedOrder((prev) =>
-      prev && prev.id === id ? { ...prev, status } : prev,
-    );
+  async function handleStatusChange(id: number, status: OrderStatus) {
+    const updated = await apiFetch<OrderDetail>(`/api/orders/${id}`, {
+      method: "PATCH",
+      body: { status },
+    });
+    patchItem((o) => o.id === id, () => updated);
+    setSelectedOrder((prev) => (prev && prev.id === id ? updated : prev));
+    setOrderDetail(updated);
   }
 
   return (
@@ -84,15 +84,14 @@ export default function Shipments() {
         <Input
           placeholder="고객명 또는 상품명 검색"
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-xs"
         />
         <Select
           value={statusFilter}
-          onValueChange={(value) => {
-            setStatusFilter((value as OrderStatus | "all" | null) ?? "all");
-            resetPage();
-          }}
+          onValueChange={(value) =>
+            setStatusFilter((value as OrderStatus | "all" | null) ?? "all")
+          }
         >
           <SelectTrigger className="w-36">
             <SelectValue placeholder="상태">
@@ -103,15 +102,15 @@ export default function Shipments() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="paid">결제완료</SelectItem>
-            <SelectItem value="preparing">상품준비중</SelectItem>
-            <SelectItem value="shipping">배송중</SelectItem>
-            <SelectItem value="delivered">배송완료</SelectItem>
-            <SelectItem value="cancelled">취소·반품</SelectItem>
+            <SelectItem value="PAID">결제완료</SelectItem>
+            <SelectItem value="PREPARING">상품준비중</SelectItem>
+            <SelectItem value="SHIPPING">배송중</SelectItem>
+            <SelectItem value="DELIVERED">배송완료</SelectItem>
+            <SelectItem value="CANCELLED">취소·반품</SelectItem>
           </SelectContent>
         </Select>
         <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {filtered.length}건
+          총 {total}건
         </span>
       </div>
 
@@ -131,7 +130,19 @@ export default function Shipments() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.length === 0 ? (
+            {error ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-destructive">
+                  {error}
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  불러오는 중...
+                </TableCell>
+              </TableRow>
+            ) : items.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={7}
@@ -141,16 +152,16 @@ export default function Shipments() {
                 </TableCell>
               </TableRow>
             ) : (
-              paged.map((order) => (
+              items.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
-                    {order.id}
+                    {order.code}
                   </TableCell>
                   <TableCell className="truncate font-medium">
                     {order.customerName}
                   </TableCell>
                   <TableCell className="hidden truncate text-muted-foreground sm:table-cell">
-                    {order.productName}
+                    {order.productSummary}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -165,14 +176,14 @@ export default function Shipments() {
                     {order.trackingNo ?? "-"}
                   </TableCell>
                   <TableCell className="hidden text-right font-mono text-muted-foreground lg:table-cell">
-                    {order.orderedAt}
+                    {formatDate(order.orderedAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="pr-0"
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => openOrderDetail(order)}
                     >
                       상세보기
                     </Button>
@@ -200,13 +211,30 @@ export default function Shipments() {
               <DialogHeader>
                 <DialogTitle>{selectedOrder.customerName}</DialogTitle>
                 <DialogDescription className="font-mono">
-                  {selectedOrder.id}
+                  {selectedOrder.code}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">상품명</span>
-                  <span>{selectedOrder.productName}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground">상품 내역</span>
+                  {detailLoading ? (
+                    <p className="text-muted-foreground">불러오는 중...</p>
+                  ) : orderDetail ? (
+                    <ul className="flex flex-col gap-1 rounded-md border border-dashed border-border p-2">
+                      {orderDetail.items.map((item) => (
+                        <li key={item.productId} className="flex justify-between">
+                          <span>
+                            {item.productName} × {item.quantity}
+                          </span>
+                          <span className="font-mono">
+                            {formatWon(item.unitPrice * item.quantity)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>{selectedOrder.productSummary}</p>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">운송장번호</span>
@@ -214,7 +242,7 @@ export default function Shipments() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">주문일</span>
-                  <span className="font-mono">{selectedOrder.orderedAt}</span>
+                  <span className="font-mono">{formatDate(selectedOrder.orderedAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">상태</span>
@@ -231,11 +259,11 @@ export default function Shipments() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paid">결제완료</SelectItem>
-                      <SelectItem value="preparing">상품준비중</SelectItem>
-                      <SelectItem value="shipping">배송중</SelectItem>
-                      <SelectItem value="delivered">배송완료</SelectItem>
-                      <SelectItem value="cancelled">취소·반품</SelectItem>
+                      <SelectItem value="PAID">결제완료</SelectItem>
+                      <SelectItem value="PREPARING">상품준비중</SelectItem>
+                      <SelectItem value="SHIPPING">배송중</SelectItem>
+                      <SelectItem value="DELIVERED">배송완료</SelectItem>
+                      <SelectItem value="CANCELLED">취소·반품</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

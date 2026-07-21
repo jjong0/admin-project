@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 
 import {
@@ -14,29 +14,9 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
-import {
-  ALL_ORDERS,
-  ORDER_STATUS_COLOR,
-  ORDER_STATUS_LABEL,
-  type OrderStatus,
-} from '@/lib/mock-orders'
-
-const STAGE_ORDER: OrderStatus[] = ['paid', 'preparing', 'shipping', 'delivered', 'cancelled']
-
-const STAGES = STAGE_ORDER.map((status) => ({
-  key: status,
-  label: ORDER_STATUS_LABEL[status],
-  count: ALL_ORDERS.filter((order) => order.status === status).length,
-  color: ORDER_STATUS_COLOR[status],
-}))
-
-const chartData = [
-  { date: '2026-06-18', users: 186, signups: 42 },
-  { date: '2026-06-25', users: 205, signups: 51 },
-  { date: '2026-07-02', users: 237, signups: 48 },
-  { date: '2026-07-09', users: 273, signups: 61 },
-  { date: '2026-07-16', users: 309, signups: 55 },
-]
+import { apiFetch } from '@/lib/api-client'
+import type { DashboardStats } from '@/lib/api-types'
+import { ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from '@/lib/status'
 
 const chartConfig = {
   users: {
@@ -50,6 +30,25 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    apiFetch<DashboardStats>('/api/dashboard/stats')
+      .then(setStats)
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : '통계를 불러오지 못했습니다.'),
+      )
+  }, [])
+
+  const stages =
+    stats?.stages.map((stage) => ({
+      key: stage.status,
+      label: ORDER_STATUS_LABEL[stage.status],
+      count: stage.count,
+      color: ORDER_STATUS_COLOR[stage.status],
+    })) ?? []
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -61,28 +60,34 @@ export default function Dashboard() {
 
       <Card>
         <CardContent className="flex items-stretch overflow-x-auto scroll-px-1 snap-x snap-mandatory">
-          {STAGES.map((stage, i) => (
-            <Fragment key={stage.key}>
-              <div className="flex min-w-28 flex-1 snap-start flex-col gap-2 px-1 py-1">
-                <span
-                  className="h-1.5 w-7 rounded-full"
-                  style={{ background: stage.color }}
-                />
-                <span
-                  className="font-mono text-3xl leading-none font-semibold tabular-nums"
-                  style={{ color: stage.color }}
-                >
-                  {stage.count}
-                </span>
-                <span className="text-xs text-muted-foreground">{stage.label}</span>
-              </div>
-              {i < STAGES.length - 1 && (
-                <div aria-hidden className="flex w-6 shrink-0 items-center justify-center">
-                  <div className="h-0 w-full border-t-2 border-dashed border-border" />
+          {error ? (
+            <p className="p-2 text-sm text-destructive">{error}</p>
+          ) : !stats ? (
+            <p className="p-2 text-sm text-muted-foreground">불러오는 중...</p>
+          ) : (
+            stages.map((stage, i) => (
+              <Fragment key={stage.key}>
+                <div className="flex min-w-28 flex-1 snap-start flex-col gap-2 px-1 py-1">
+                  <span
+                    className="h-1.5 w-7 rounded-full"
+                    style={{ background: stage.color }}
+                  />
+                  <span
+                    className="font-mono text-3xl leading-none font-semibold tabular-nums"
+                    style={{ color: stage.color }}
+                  >
+                    {stage.count}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{stage.label}</span>
                 </div>
-              )}
-            </Fragment>
-          ))}
+                {i < stages.length - 1 && (
+                  <div aria-hidden className="flex w-6 shrink-0 items-center justify-center">
+                    <div className="h-0 w-full border-t-2 border-dashed border-border" />
+                  </div>
+                )}
+              </Fragment>
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -93,7 +98,7 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
-            <AreaChart data={chartData}>
+            <AreaChart data={stats?.trend ?? []}>
               <defs>
                 <linearGradient id="fillUsers" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--color-users)" stopOpacity={0.8} />

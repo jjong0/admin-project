@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { DownloadIcon } from "lucide-react";
 
 import { PaginationControls } from "@/components/shared/pagination-controls";
@@ -28,93 +28,62 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePaginatedFilter } from "@/hooks/use-paginated-filter";
-import {
-  generateMockUsers,
-  USER_STATUS_LABEL,
-  type MockUser,
-  type UserStatus,
-} from "@/lib/mock-users";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useServerList } from "@/hooks/use-server-list";
+import { apiDownload, apiFetch, ApiError } from "@/lib/api-client";
+import type { Customer, CustomerStatus } from "@/lib/api-types";
+import { CUSTOMER_STATUS_LABEL, formatDate } from "@/lib/status";
 
 const PAGE_SIZE = 10;
 
 const STATUS_BADGE_VARIANT: Record<
-  UserStatus,
+  CustomerStatus,
   "default" | "secondary" | "destructive"
 > = {
-  active: "default",
-  inactive: "secondary",
-  suspended: "destructive",
+  ACTIVE: "default",
+  INACTIVE: "secondary",
+  SUSPENDED: "destructive",
 };
-
-const ALL_USERS = generateMockUsers();
-
-function exportToCsv(users: MockUser[]) {
-  const header = [
-    "ID",
-    "이름",
-    "이메일",
-    "전화번호",
-    "상태",
-    "가입일",
-    "최근 로그인",
-  ];
-  const rows = users.map((u) => [
-    u.id,
-    u.name,
-    u.email,
-    u.phone,
-    USER_STATUS_LABEL[u.status],
-    u.joinedAt,
-    u.lastLoginAt,
-  ]);
-  const csv = [header, ...rows].map((row) => row.join(",")).join("\n");
-  const bom = String.fromCharCode(0xfeff);
-  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function Users() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
-  const [selectedUser, setSelectedUser] = useState<MockUser | null>(null);
-  const [users, setUsers] = useState(ALL_USERS);
+  const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
+  const [selectedUser, setSelectedUser] = useState<Customer | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return users.filter((u) => {
-      const matchesKeyword =
-        !keyword ||
-        u.name.toLowerCase().includes(keyword) ||
-        u.email.toLowerCase().includes(keyword);
-      const matchesStatus = statusFilter === "all" || u.status === statusFilter;
-      return matchesKeyword && matchesStatus;
-    });
-  }, [users, search, statusFilter]);
+  const debouncedSearch = useDebouncedValue(search);
 
-  const { currentPage, totalPages, paged, setPage, resetPage } =
-    usePaginatedFilter(filtered, PAGE_SIZE);
-
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    resetPage();
-  }
-
-  function handleStatusFilterChange(value: UserStatus | "all") {
-    setStatusFilter(value);
-    resetPage();
-  }
-
-  function handleStatusChange(id: string, status: UserStatus) {
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status } : u)));
-    setSelectedUser((prev) =>
-      prev && prev.id === id ? { ...prev, status } : prev,
+  const { items, total, currentPage, totalPages, setPage, loading, error, patchItem } =
+    useServerList<Customer>(
+      "/api/customers",
+      { search: debouncedSearch, status: statusFilter === "all" ? undefined : statusFilter },
+      PAGE_SIZE,
     );
+
+  async function handleStatusChange(id: number, status: CustomerStatus) {
+    const updated = await apiFetch<Customer>(`/api/customers/${id}`, {
+      method: "PATCH",
+      body: { status },
+    });
+    patchItem((c) => c.id === id, () => updated);
+    setSelectedUser((prev) => (prev && prev.id === id ? updated : prev));
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await apiDownload(
+        "/api/customers/export",
+        { search: debouncedSearch, status: statusFilter === "all" ? undefined : statusFilter },
+        `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+      );
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : "내보내기에 실패했습니다.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -129,42 +98,45 @@ export default function Users() {
         <Button
           variant="outline"
           className="self-start sm:self-auto"
-          onClick={() => exportToCsv(filtered)}
+          onClick={handleExport}
+          disabled={exporting}
         >
           <DownloadIcon />
-          CSV 내보내기
+          {exporting ? "내보내는 중..." : "CSV 내보내기"}
         </Button>
       </div>
+
+      {exportError && <p className="text-sm text-destructive">{exportError}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="이름 또는 이메일 검색"
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-xs"
         />
         <Select
           value={statusFilter}
           onValueChange={(value) =>
-            handleStatusFilterChange((value as UserStatus | "all" | null) ?? "all")
+            setStatusFilter((value as CustomerStatus | "all" | null) ?? "all")
           }
         >
           <SelectTrigger className="w-32">
             <SelectValue placeholder="상태">
-              {(value: UserStatus | "all") =>
-                value === "all" ? "전체 상태" : USER_STATUS_LABEL[value]
+              {(value: CustomerStatus | "all") =>
+                value === "all" ? "전체 상태" : CUSTOMER_STATUS_LABEL[value]
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="active">활성</SelectItem>
-            <SelectItem value="inactive">휴면</SelectItem>
-            <SelectItem value="suspended">정지</SelectItem>
+            <SelectItem value="ACTIVE">활성</SelectItem>
+            <SelectItem value="INACTIVE">휴면</SelectItem>
+            <SelectItem value="SUSPENDED">정지</SelectItem>
           </SelectContent>
         </Select>
         <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {filtered.length}명
+          총 {total}명
         </span>
       </div>
 
@@ -184,7 +156,19 @@ export default function Users() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.length === 0 ? (
+            {error ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-destructive">
+                  {error}
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  불러오는 중...
+                </TableCell>
+              </TableRow>
+            ) : items.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={7}
@@ -194,10 +178,10 @@ export default function Users() {
                 </TableCell>
               </TableRow>
             ) : (
-              paged.map((user) => (
+              items.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="border-r border-dashed border-border font-mono text-xs text-muted-foreground">
-                    {user.id}
+                    {user.code}
                   </TableCell>
                   <TableCell className="truncate font-medium">{user.name}</TableCell>
                   <TableCell className="hidden truncate text-muted-foreground md:table-cell">
@@ -205,14 +189,14 @@ export default function Users() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={STATUS_BADGE_VARIANT[user.status]}>
-                      {USER_STATUS_LABEL[user.status]}
+                      {CUSTOMER_STATUS_LABEL[user.status]}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden font-mono text-muted-foreground lg:table-cell">
-                    {user.joinedAt}
+                    {formatDate(user.joinedAt)}
                   </TableCell>
                   <TableCell className="hidden font-mono text-muted-foreground xl:table-cell">
-                    {user.lastLoginAt}
+                    {formatDate(user.lastLoginAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -247,7 +231,7 @@ export default function Users() {
               <DialogHeader>
                 <DialogTitle>{selectedUser.name}</DialogTitle>
                 <DialogDescription className="font-mono">
-                  {selectedUser.id}
+                  {selectedUser.code}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2 text-sm">
@@ -261,29 +245,29 @@ export default function Users() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">가입일</span>
-                  <span className="font-mono">{selectedUser.joinedAt}</span>
+                  <span className="font-mono">{formatDate(selectedUser.joinedAt)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">최근 로그인</span>
-                  <span className="font-mono">{selectedUser.lastLoginAt}</span>
+                  <span className="font-mono">{formatDate(selectedUser.lastLoginAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">상태</span>
                   <Select
                     value={selectedUser.status}
                     onValueChange={(value) => {
-                      if (value) handleStatusChange(selectedUser.id, value as UserStatus);
+                      if (value) handleStatusChange(selectedUser.id, value as CustomerStatus);
                     }}
                   >
                     <SelectTrigger size="sm" className="w-28">
                       <SelectValue>
-                        {(value: UserStatus) => USER_STATUS_LABEL[value]}
+                        {(value: CustomerStatus) => CUSTOMER_STATUS_LABEL[value]}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">활성</SelectItem>
-                      <SelectItem value="inactive">휴면</SelectItem>
-                      <SelectItem value="suspended">정지</SelectItem>
+                      <SelectItem value="ACTIVE">활성</SelectItem>
+                      <SelectItem value="INACTIVE">휴면</SelectItem>
+                      <SelectItem value="SUSPENDED">정지</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
