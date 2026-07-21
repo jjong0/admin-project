@@ -11,3 +11,92 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// 어드민 콘솔에 로그인하는 관리자 계정. 현재는 역할 구분 없는 단일 관리자.
+model Admin {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// 고객 관리 페이지의 대상. 표시용 코드(U0001 등)는 id를 프론트/응답에서 포맷해서 쓰고
+// 별도 컬럼으로 저장하지 않는다 (중복 소스 방지).
+model Customer {
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  phone         String
+  status        CustomerStatus @default(ACTIVE)
+  joinedAt      DateTime       @default(now())
+  lastLoginAt   DateTime?
+  orders        Order[]
+
+  @@index([status])
+}
+
+enum ProductStatus {
+  SELLING
+  SOLDOUT
+  HIDDEN
+}
+
+// 상품 관리 페이지의 대상. category는 지금은 소수 고정 카테고리라 별도 테이블 없이
+// 문자열로 두고, 카테고리 자체를 관리해야 하는 요구가 생기면 Category 모델로 분리한다.
+model Product {
+  id         Int           @id @default(autoincrement())
+  name       String
+  category   String
+  price      Int // KRW, 원 단위 정수
+  stock      Int           @default(0)
+  status     ProductStatus @default(SELLING)
+  updatedAt  DateTime      @updatedAt
+  orderItems OrderItem[]
+
+  @@index([category])
+  @@index([status])
+}
+
+enum OrderStatus {
+  PAID
+  PREPARING
+  SHIPPING
+  DELIVERED
+  CANCELLED
+}
+
+// 배송 관리 페이지의 대상. 한 주문은 여러 상품(OrderItem)을 담을 수 있다.
+model Order {
+  id          Int         @id @default(autoincrement())
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  customerId  Int
+  status      OrderStatus @default(PAID)
+  trackingNo  String?
+  orderedAt   DateTime    @default(now())
+  items       OrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// 주문 시점의 단가를 unitPrice로 스냅샷해서, 이후 상품 가격이 바뀌어도
+// 과거 주문 금액이 달라지지 않도록 한다.
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  order     Order   @relation(fields: [orderId], references: [id])
+  orderId   Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  quantity  Int     @default(1)
+  unitPrice Int // 주문 시점 단가 스냅샷 (KRW)
+
+  @@index([orderId])
+  @@index([productId])
+}
