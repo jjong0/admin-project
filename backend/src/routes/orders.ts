@@ -1,11 +1,11 @@
 import { Router } from "express";
 
-import type { OrderStatus } from "../generated/prisma/client.js";
 import { formatCustomerCode, formatOrderCode, formatProductCode } from "../lib/codes.js";
 import { ORDER_STATUSES } from "../lib/constants.js";
 import { parseFilter, parsePagination, parseSearch } from "../lib/pagination.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { isValidStatus } from "../lib/validate.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -90,14 +90,31 @@ ordersRouter.get("/:id", async (req, res) => {
 
 ordersRouter.patch("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const status = req.body?.status as OrderStatus | undefined;
-  if (!status || !ORDER_STATUSES.includes(status)) {
+  const status = req.body?.status;
+  const trackingNo = req.body?.trackingNo;
+
+  if (status !== undefined && !isValidStatus(status, ORDER_STATUSES)) {
     res.status(400).json({ error: "올바르지 않은 상태입니다." });
+    return;
+  }
+  if (trackingNo !== undefined && typeof trackingNo !== "string") {
+    res.status(400).json({ error: "운송장번호 형식이 올바르지 않습니다." });
+    return;
+  }
+  if (status === undefined && trackingNo === undefined) {
+    res.status(400).json({ error: "변경할 값을 입력하세요." });
     return;
   }
 
   const order = await prisma.order
-    .update({ where: { id }, data: { status }, ...orderWithRelations })
+    .update({
+      where: { id },
+      data: {
+        ...(status !== undefined ? { status } : {}),
+        ...(trackingNo !== undefined ? { trackingNo: trackingNo.trim() || null } : {}),
+      },
+      ...orderWithRelations,
+    })
     .catch(() => null);
   if (!order) {
     res.status(404).json({ error: "주문을 찾을 수 없습니다." });

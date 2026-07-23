@@ -1,12 +1,13 @@
 import { Router } from "express";
 
-import type { Customer, CustomerStatus } from "../generated/prisma/client.js";
+import type { Customer } from "../generated/prisma/client.js";
 import { formatCustomerCode } from "../lib/codes.js";
 import { CUSTOMER_STATUSES } from "../lib/constants.js";
 import { toCsv } from "../lib/csv.js";
 import { parseFilter, parsePagination, parseSearch } from "../lib/pagination.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { isValidStatus } from "../lib/validate.js";
 
 export const customersRouter = Router();
 customersRouter.use(requireAuth);
@@ -20,7 +21,6 @@ function serializeCustomer(customer: Customer) {
     phone: customer.phone,
     status: customer.status,
     joinedAt: customer.joinedAt,
-    lastLoginAt: customer.lastLoginAt,
   };
 }
 
@@ -46,7 +46,7 @@ customersRouter.get("/export", async (req, res) => {
   const customers = await prisma.customer.findMany({ where, orderBy: { id: "asc" } });
 
   const csv = toCsv(
-    ["ID", "이름", "이메일", "전화번호", "상태", "가입일", "최근 로그인"],
+    ["ID", "이름", "이메일", "전화번호", "상태", "가입일"],
     customers.map((c) => [
       formatCustomerCode(c.id),
       c.name,
@@ -54,7 +54,6 @@ customersRouter.get("/export", async (req, res) => {
       c.phone,
       c.status,
       c.joinedAt.toISOString().slice(0, 10),
-      c.lastLoginAt?.toISOString().slice(0, 10) ?? "",
     ]),
   );
 
@@ -87,8 +86,8 @@ customersRouter.get("/:id", async (req, res) => {
 
 customersRouter.patch("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const status = req.body?.status as CustomerStatus | undefined;
-  if (!status || !CUSTOMER_STATUSES.includes(status)) {
+  const status = req.body?.status;
+  if (!isValidStatus(status, CUSTOMER_STATUSES)) {
     res.status(400).json({ error: "올바르지 않은 상태입니다." });
     return;
   }

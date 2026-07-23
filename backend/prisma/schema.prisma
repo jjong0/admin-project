@@ -36,7 +36,6 @@ model Customer {
   phone         String
   status        CustomerStatus @default(ACTIVE)
   joinedAt      DateTime       @default(now())
-  lastLoginAt   DateTime?
   orders        Order[]
 
   @@index([status])

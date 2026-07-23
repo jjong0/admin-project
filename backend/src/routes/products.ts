@@ -1,11 +1,12 @@
 import { Router } from "express";
 
-import type { Product, ProductStatus } from "../generated/prisma/client.js";
+import type { Product } from "../generated/prisma/client.js";
 import { formatProductCode } from "../lib/codes.js";
 import { PRODUCT_STATUSES } from "../lib/constants.js";
 import { parseFilter, parsePagination, parseSearch } from "../lib/pagination.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { isValidStatus } from "../lib/validate.js";
 
 export const productsRouter = Router();
 productsRouter.use(requireAuth);
@@ -64,8 +65,8 @@ productsRouter.get("/:id", async (req, res) => {
 
 productsRouter.patch("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const status = req.body?.status as ProductStatus | undefined;
-  if (!status || !PRODUCT_STATUSES.includes(status)) {
+  const status = req.body?.status;
+  if (!isValidStatus(status, PRODUCT_STATUSES)) {
     res.status(400).json({ error: "올바르지 않은 상태입니다." });
     return;
   }

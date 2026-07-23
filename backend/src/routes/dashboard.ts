@@ -27,15 +27,26 @@ dashboardRouter.get("/stats", async (_req, res) => {
   });
 
   const now = Date.now();
-  const trend = Array.from({ length: TREND_WEEKS }, (_, i) => {
-    const weeksAgo = TREND_WEEKS - 1 - i;
-    const weekEnd = now - weeksAgo * WEEK_MS;
-    const signups = customers.filter((c) => {
-      const diff = weekEnd - c.joinedAt.getTime();
-      return diff >= 0 && diff < WEEK_MS;
-    }).length;
-    const users = customers.filter((c) => c.joinedAt.getTime() <= weekEnd).length;
-    return { date: new Date(weekEnd).toISOString().slice(0, 10), users, signups };
+  const weekEnds = Array.from(
+    { length: TREND_WEEKS },
+    (_, i) => now - (TREND_WEEKS - 1 - i) * WEEK_MS,
+  );
+
+  // customers is sorted by joinedAt ascending, so a single forward-moving
+  // cursor across the weekly boundaries computes both the cumulative total
+  // and each week's signups in one O(n) pass, instead of re-filtering the
+  // full array from scratch for every week.
+  let cursor = 0;
+  let cumulativeUsers = 0;
+  const trend = weekEnds.map((weekEnd) => {
+    const prevWeekEnd = weekEnd - WEEK_MS;
+    let signups = 0;
+    while (cursor < customers.length && customers[cursor].joinedAt.getTime() <= weekEnd) {
+      cumulativeUsers++;
+      if (customers[cursor].joinedAt.getTime() > prevWeekEnd) signups++;
+      cursor++;
+    }
+    return { date: new Date(weekEnd).toISOString().slice(0, 10), users: cumulativeUsers, signups };
   });
 
   res.json({ stages, trend });
