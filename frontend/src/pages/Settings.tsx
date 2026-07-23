@@ -10,8 +10,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-
-type NotificationKey = "newOrder" | "lowStock" | "shippingDelay";
+import {
+  getInitialNotificationPreferences,
+  saveNotificationPreferences,
+  type NotificationKey,
+} from "@/lib/notification-preferences";
 
 const NOTIFICATION_ITEMS: { key: NotificationKey; label: string; description: string }[] = [
   {
@@ -56,14 +59,14 @@ function SettingRow({
 export default function Settings() {
   const { admin } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [notifications, setNotifications] = useState<Record<NotificationKey, boolean>>({
-    newOrder: true,
-    lowStock: true,
-    shippingDelay: false,
-  });
+  const [notifications, setNotifications] = useState(getInitialNotificationPreferences);
 
   function handleNotificationChange(key: NotificationKey, checked: boolean) {
-    setNotifications((prev) => ({ ...prev, [key]: checked }));
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: checked };
+      saveNotificationPreferences(next);
+      return next;
+    });
   }
 
   return (

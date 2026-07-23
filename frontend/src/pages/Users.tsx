@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DownloadIcon } from "lucide-react";
 
+import { ListFilters } from "@/components/shared/list-filters";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -108,37 +108,15 @@ export default function Users() {
 
       {exportError && <p className="text-sm text-destructive">{exportError}</p>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="이름 또는 이메일 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-xs"
-        />
-        <Select
-          value={statusFilter}
-          onValueChange={(value) =>
-            setStatusFilter((value as CustomerStatus | "all" | null) ?? "all")
-          }
-        >
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="상태">
-              {(value: CustomerStatus | "all") =>
-                value === "all" ? "전체 상태" : CUSTOMER_STATUS_LABEL[value]
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="ACTIVE">활성</SelectItem>
-            <SelectItem value="INACTIVE">휴면</SelectItem>
-            <SelectItem value="SUSPENDED">정지</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {total}명
-        </span>
-      </div>
+      <ListFilters
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="이름 또는 이메일 검색"
+        statusValue={statusFilter}
+        onStatusChange={(value) => setStatusFilter((value as CustomerStatus | "all") ?? "all")}
+        statusLabels={CUSTOMER_STATUS_LABEL}
+        countLabel={`총 ${total}명`}
+      />
 
       <div className="overflow-hidden rounded-md ring-1 ring-border">
         <Table>
@@ -151,27 +129,26 @@ export default function Users() {
               <TableHead className="hidden md:table-cell">이메일</TableHead>
               <TableHead className="w-20">상태</TableHead>
               <TableHead className="hidden w-28 lg:table-cell">가입일</TableHead>
-              <TableHead className="hidden w-28 xl:table-cell">최근 로그인</TableHead>
               <TableHead className="w-24 text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {error ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-destructive">
+                <TableCell colSpan={6} className="h-24 text-center text-destructive">
                   {error}
                 </TableCell>
               </TableRow>
             ) : loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   불러오는 중...
                 </TableCell>
               </TableRow>
             ) : items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={6}
                   className="h-24 text-center text-muted-foreground"
                 >
                   검색 결과가 없습니다.
@@ -194,9 +171,6 @@ export default function Users() {
                   </TableCell>
                   <TableCell className="hidden font-mono text-muted-foreground lg:table-cell">
                     {formatDate(user.joinedAt)}
-                  </TableCell>
-                  <TableCell className="hidden font-mono text-muted-foreground xl:table-cell">
-                    {formatDate(user.lastLoginAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -247,10 +221,6 @@ export default function Users() {
                   <span className="text-muted-foreground">가입일</span>
                   <span className="font-mono">{formatDate(selectedUser.joinedAt)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">최근 로그인</span>
-                  <span className="font-mono">{formatDate(selectedUser.lastLoginAt)}</span>
-                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">상태</span>
                   <Select
@@ -265,9 +235,11 @@ export default function Users() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ACTIVE">활성</SelectItem>
-                      <SelectItem value="INACTIVE">휴면</SelectItem>
-                      <SelectItem value="SUSPENDED">정지</SelectItem>
+                      {Object.entries(CUSTOMER_STATUS_LABEL).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -10,7 +10,6 @@ export type Customer = {
   phone: string;
   status: CustomerStatus;
   joinedAt: string;
-  lastLoginAt: string | null;
 };
 
 export type Product = {

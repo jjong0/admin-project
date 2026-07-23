@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { ListFilters } from "@/components/shared/list-filters";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -89,17 +89,17 @@ export default function Products() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="상품명 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-xs"
-        />
-        <Select
-          value={category}
-          onValueChange={(value) => setCategory(value ?? "all")}
-        >
+      <ListFilters
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="상품명 검색"
+        statusValue={statusFilter}
+        onStatusChange={(value) => setStatusFilter((value as ProductStatus | "all") ?? "all")}
+        statusLabels={PRODUCT_STATUS_LABEL}
+        statusWidth="w-28"
+        countLabel={`총 ${total}개`}
+      >
+        <Select value={category} onValueChange={(value) => setCategory(value ?? "all")}>
           <SelectTrigger className="w-32">
             <SelectValue placeholder="카테고리">
               {(value: string) => (value === "all" ? "전체 카테고리" : value)}
@@ -114,30 +114,7 @@ export default function Products() {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={statusFilter}
-          onValueChange={(value) =>
-            setStatusFilter((value as ProductStatus | "all" | null) ?? "all")
-          }
-        >
-          <SelectTrigger className="w-28">
-            <SelectValue placeholder="상태">
-              {(value: ProductStatus | "all") =>
-                value === "all" ? "전체 상태" : PRODUCT_STATUS_LABEL[value]
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="SELLING">판매중</SelectItem>
-            <SelectItem value="SOLDOUT">품절</SelectItem>
-            <SelectItem value="HIDDEN">숨김</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {total}개
-        </span>
-      </div>
+      </ListFilters>
 
       <div className="overflow-hidden rounded-md ring-1 ring-border">
         <Table>
@@ -276,9 +253,11 @@ export default function Products() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SELLING">판매중</SelectItem>
-                      <SelectItem value="SOLDOUT">품절</SelectItem>
-                      <SelectItem value="HIDDEN">숨김</SelectItem>
+                      {Object.entries(PRODUCT_STATUS_LABEL).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

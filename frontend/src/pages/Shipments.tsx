@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { ListFilters } from "@/components/shared/list-filters";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ export default function Shipments() {
   const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [trackingNoInput, setTrackingNoInput] = useState("");
+  const [savingTrackingNo, setSavingTrackingNo] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
 
@@ -54,6 +57,7 @@ export default function Shipments() {
   function openOrderDetail(order: OrderSummary) {
     setSelectedOrder(order);
     setOrderDetail(null);
+    setTrackingNoInput(order.trackingNo ?? "");
     setDetailLoading(true);
     apiFetch<OrderDetail>(`/api/orders/${order.id}`)
       .then(setOrderDetail)
@@ -71,6 +75,23 @@ export default function Shipments() {
     setOrderDetail(updated);
   }
 
+  async function handleTrackingNoSave() {
+    if (!selectedOrder) return;
+    setSavingTrackingNo(true);
+    try {
+      const updated = await apiFetch<OrderDetail>(`/api/orders/${selectedOrder.id}`, {
+        method: "PATCH",
+        body: { trackingNo: trackingNoInput },
+      });
+      patchItem((o) => o.id === selectedOrder.id, () => updated);
+      setSelectedOrder(updated);
+      setOrderDetail(updated);
+      setTrackingNoInput(updated.trackingNo ?? "");
+    } finally {
+      setSavingTrackingNo(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -80,39 +101,16 @@ export default function Shipments() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="고객명 또는 상품명 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-xs"
-        />
-        <Select
-          value={statusFilter}
-          onValueChange={(value) =>
-            setStatusFilter((value as OrderStatus | "all" | null) ?? "all")
-          }
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="상태">
-              {(value: OrderStatus | "all") =>
-                value === "all" ? "전체 상태" : ORDER_STATUS_LABEL[value]
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="PAID">결제완료</SelectItem>
-            <SelectItem value="PREPARING">상품준비중</SelectItem>
-            <SelectItem value="SHIPPING">배송중</SelectItem>
-            <SelectItem value="DELIVERED">배송완료</SelectItem>
-            <SelectItem value="CANCELLED">취소·반품</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground sm:ml-auto">
-          총 {total}건
-        </span>
-      </div>
+      <ListFilters
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="고객명 또는 상품명 검색"
+        statusValue={statusFilter}
+        onStatusChange={(value) => setStatusFilter((value as OrderStatus | "all") ?? "all")}
+        statusLabels={ORDER_STATUS_LABEL}
+        statusWidth="w-36"
+        countLabel={`총 ${total}건`}
+      />
 
       <div className="overflow-hidden rounded-md ring-1 ring-border">
         <Table>
@@ -236,9 +234,24 @@ export default function Shipments() {
                     <p>{selectedOrder.productSummary}</p>
                   )}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">운송장번호</span>
-                  <span className="font-mono">{selectedOrder.trackingNo ?? "-"}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="shrink-0 text-muted-foreground">운송장번호</span>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={trackingNoInput}
+                      onChange={(e) => setTrackingNoInput(e.target.value)}
+                      placeholder="미등록"
+                      className="h-7 w-36 font-mono text-xs"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={savingTrackingNo}
+                      onClick={handleTrackingNoSave}
+                    >
+                      저장
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">주문일</span>
@@ -259,11 +272,11 @@ export default function Shipments() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PAID">결제완료</SelectItem>
-                      <SelectItem value="PREPARING">상품준비중</SelectItem>
-                      <SelectItem value="SHIPPING">배송중</SelectItem>
-                      <SelectItem value="DELIVERED">배송완료</SelectItem>
-                      <SelectItem value="CANCELLED">취소·반품</SelectItem>
+                      {Object.entries(ORDER_STATUS_LABEL).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
